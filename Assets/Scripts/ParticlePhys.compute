@@ -1,0 +1,51 @@
+﻿// Date Created:        May 14, 2020
+// Created By:          Peter Reynolds
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel PartPhys
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+StructuredBuffer<float2> pPos;
+RWStructuredBuffer<float2> pVels;
+StructuredBuffer<uint> pTypes;
+
+// Output position
+RWStructuredBuffer<float2> nPos;
+
+uniform StructuredBuffer<float3> pProps;
+
+uniform uint pCount;
+uniform uint pTypeCount;
+
+
+[numthreads(256,1,1)]
+void PartPhys (uint3 id : SV_DispatchThreadID)
+{
+	nPos[id.x] = pPos[id.x];
+
+	for (uint other = 0; other < pCount; other++)
+	{
+		float dist = max(distance(pPos[id.x], pPos[other]), 0.001);
+		float2 vect = pPos[other] - pPos[id.x];
+
+		uint propID = pTypes[id.x] * pTypeCount + pTypes[other];
+
+		bool isDifferent = (id.x != other);
+		bool isClose = (dist < pProps[propID].x);
+		bool isInRange = (dist < pProps[propID].y);
+
+		float2 force = isDifferent * (
+			isClose * vect * (1 / dist) * (1 / (pProps[propID].x + 2) - 1 / (dist + 2)) +
+
+			isInRange * (vect/dist) * (1 - abs(dist - (pProps[propID].y + pProps[propID].x) / 2) * 2 / (pProps[propID].y - pProps[propID].x)) * pProps[propID].z
+			);
+
+		pVels[id.x] += force;
+	}
+
+	pVels[id.x] *= 0.95;
+
+	nPos[id.x] += pVels[id.x];
+
+}
