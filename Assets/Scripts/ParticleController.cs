@@ -7,8 +7,8 @@ using UnityEngine;
 
 public class ParticleController : MonoBehaviour
 {
-    private const float WIDTH = 75f;
-    private const float HEIGHT = 35f;
+    private const float WIDTH = 79.5f;
+    private const float HEIGHT = 44.5f;
 
     [SerializeField]
     private Material partMat;
@@ -26,7 +26,6 @@ public class ParticleController : MonoBehaviour
     private List<List<float>> meanForceDist;
     private List<List<float>> forceDistHalfLength;
     private List<List<float>> forceMult;
-    private List<float> closeForce;
 
     private float maxForce;
 
@@ -52,7 +51,6 @@ public class ParticleController : MonoBehaviour
         particleVelocities = new List<Vector2>();
         particleTypes = new List<uint>();
 
-        closeForce = new List<float>();
         forceEdges = new List<List<Vector2>>();
         meanForceDist = new List<List<float>>();
         forceDistHalfLength = new List<List<float>>();
@@ -60,7 +58,6 @@ public class ParticleController : MonoBehaviour
 
         for (int c = 0; c < PartMats.Count; c++)
         {
-            closeForce.Add(Random.Range(0.005f, 0.01f));
 
             forceMult.Add(new List<float>());
             forceEdges.Add(new List<Vector2>());
@@ -99,7 +96,7 @@ public class ParticleController : MonoBehaviour
 
     void Awake()
     {
-        Application.targetFrameRate = 72;
+        Application.targetFrameRate = 60;
     }
 
     // Start is called before the first frame update
