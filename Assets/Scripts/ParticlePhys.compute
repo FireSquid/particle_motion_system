@@ -18,6 +18,8 @@ uniform StructuredBuffer<float3> pProps;
 uniform uint pCount;
 uniform uint pTypeCount;
 
+uniform float4 boardSize;
+
 
 [numthreads(256,1,1)]
 void PartPhys (uint3 id : SV_DispatchThreadID)
@@ -36,9 +38,9 @@ void PartPhys (uint3 id : SV_DispatchThreadID)
 		bool isInRange = (dist < pProps[propID].y);
 
 		float2 force = isDifferent * (
-			isClose * vect * (1 / dist) * (1 / (pProps[propID].x + 2) - 1 / (dist + 2)) +
+			isClose * vect * pProps[propID].x * 2 * (1 / (pProps[propID].x + 2) - 1 / (dist + 2)) +
 
-			isInRange * (vect/dist) * (1 - abs(dist - (pProps[propID].y + pProps[propID].x) / 2) * 2 / (pProps[propID].y - pProps[propID].x)) * pProps[propID].z
+			isInRange * (vect / dist) * (1 - abs(dist - 0.5 * (pProps[propID].y + pProps[propID].x)) * 2 / (pProps[propID].y - pProps[propID].x)) * pProps[propID].z
 			);
 
 		pVels[id.x] += force;
@@ -47,5 +49,16 @@ void PartPhys (uint3 id : SV_DispatchThreadID)
 	pVels[id.x] *= 0.95;
 
 	nPos[id.x] += pVels[id.x];
+
+	bool offLeft = (nPos[id.x].x < boardSize.x && pVels[id.x].x < 0);
+	bool offRight = (nPos[id.x].x > boardSize.z && pVels[id.x].x > 0);
+	bool offBottom = (nPos[id.x].y < boardSize.y && pVels[id.x].y < 0);
+	bool offTop = (nPos[id.x].y > boardSize.w && pVels[id.x].y > 0);
+
+	pVels[id.x].x -= 2 * pVels[id.x].x * (offLeft || offRight);
+	pVels[id.x].y -= 2 * pVels[id.x].y * (offBottom || offTop);
+
+	nPos[id.x].x = clamp(nPos[id.x].x, boardSize.x, boardSize.z);
+	nPos[id.x].y = clamp(nPos[id.x].y, boardSize.y, boardSize.w);
 
 }

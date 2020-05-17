@@ -10,29 +10,47 @@ public class ParticleController : MonoBehaviour
     private const float WIDTH = 75f;
     private const float HEIGHT = 35f;
 
-    public static List<ParticleController> particles { get; private set; }
-
     [SerializeField]
-    private SpriteRenderer spriteRend;
+    private Material partMat;
+    [SerializeField]
+    private Mesh partMesh;
 
     private Vector2 velocity;
 
-    private static bool initialized = false;
-    private static List<List<Vector2>> forceEdges;
-    private static List<List<float>> meanForceDist;
-    private static List<List<float>> forceDistHalfLength;
-    private static List<List<float>> forceMult;
-    private static List<float> closeForce;
+    private List<Vector2> particlePositions;
+    private List<Vector2> particleVelocities;
+    private List<uint> particleTypes;
+
+    private bool initialized = false;
+    private List<List<Vector2>> forceEdges;
+    private List<List<float>> meanForceDist;
+    private List<List<float>> forceDistHalfLength;
+    private List<List<float>> forceMult;
+    private List<float> closeForce;
 
     private float maxForce;
 
     private int partType;
 
+    [SerializeField]
+    private ComputeShader shader;
+
+    [SerializeField]
+    private GameObject particlePrefab;
+
+    public List<Material> PartMats { get; private set; }
+
+    //public PartMatList partMatList { get; private set; }
+
+    private float last_reset;
+
     private void Initialize()
     {
         initialized = true;
 
-        particles = new List<ParticleController>();
+        particlePositions = new List<Vector2>();
+        particleVelocities = new List<Vector2>();
+        particleTypes = new List<uint>();
 
         closeForce = new List<float>();
         forceEdges = new List<List<Vector2>>();
@@ -40,7 +58,7 @@ public class ParticleController : MonoBehaviour
         forceDistHalfLength = new List<List<float>>();
         forceMult = new List<List<float>>();
 
-        for (int c = 0; c < PartMatList.partMatList.PartMats.Count; c++)
+        for (int c = 0; c < PartMats.Count; c++)
         {
             closeForce.Add(Random.Range(0.005f, 0.01f));
 
@@ -49,7 +67,7 @@ public class ParticleController : MonoBehaviour
             meanForceDist.Add(new List<float>());
             forceDistHalfLength.Add(new List<float>());
 
-            for (int i = 0; i < PartMatList.partMatList.PartMats.Count; i++)
+            for (int i = 0; i < PartMats.Count; i++)
             {
                 forceMult[c].Add(0.012f * Random.Range(-1.5f, 1.0f));
                 float minDist = Random.Range(1.1f, 1.8f);
@@ -60,73 +78,59 @@ public class ParticleController : MonoBehaviour
         }
     }
 
+    private void Reset()
+    {
+        initialized = false;
+
+        last_reset = Time.time;
+
+        PartMats = new List<Material>();
+
+        int partCount = Random.Range(5, 12);
+        for (int i = 0; i < partCount; i++)
+        {
+            Material newMat = new Material(partMat);
+            newMat.color = Random.ColorHSV(0, 1, 0.7f, 1f, 0.5f, 1f, 1f, 1f);
+            PartMats.Add(newMat);
+        }
+
+        Initialize();
+    }
+
+    void Awake()
+    {
+        Application.targetFrameRate = 72;
+    }
+
     // Start is called before the first frame update
     void Start()
     {
-        if (!initialized)
-            Initialize();
-
-        partType = Random.Range(0, PartMatList.partMatList.PartMats.Count);
-        spriteRend.material = PartMatList.partMatList.PartMats[partType];
-
-        particles.Add(this);
-        
+        Reset();
     }
 
     // Update is called once per frame
     void Update()
     {
-        /*
-        foreach (ParticleController part in particles)
-        {
-            if (part != this)
-            {
-                if (blockDist(transform.position, part.transform.position) < 12f)
-                {
-                    float partDist = (transform.position - part.transform.position).magnitude;
-
-                    if (partDist < 1f)
-                    {
-                        Vector2 newForce = (Vector2)(part.transform.position - transform.position).normalized * (1.0f / (forceEdges[partType][part.partType].x + 3.0f) - 1.0f / (partDist + 3.0f));
-                        velocity += newForce;
-                    }
-                    else if (partDist > forceEdges[partType][part.partType].x && partDist < forceEdges[partType][part.partType].y)
-                    {
-                        Vector2 newForce = (Vector2)(part.transform.position - transform.position).normalized * (1 - Mathf.Abs(partDist - meanForceDist[partType][part.partType]) / forceDistHalfLength[partType][part.partType]) * forceMult[partType][part.partType];
-                        velocity += newForce;
-                    }
-                }
-            }
-        }
-
-        velocity *= 0.9f;
-        */
-        if (transform.position.x < -WIDTH)
-        {
-            velocity.x = Mathf.Abs(velocity.x);
-        }
-        else if (transform.position.x > WIDTH)
-        {
-            velocity.x = -Mathf.Abs(velocity.x);
-        }
-
-        if (transform.position.y < -HEIGHT)
-        {
-            velocity.y = Mathf.Abs(velocity.y);
-        }
-        else if (transform.position.y > HEIGHT)
-        {
-            velocity.y = -Mathf.Abs(velocity.y);
-        }
-
-        transform.position = new Vector3(Mathf.Clamp(transform.position.x , -WIDTH, WIDTH), Mathf.Clamp(transform.position.y, -HEIGHT, HEIGHT), 0);
 
         //transform.position += (Vector3)velocity;
-    }
 
-    private void OnDestroy()
-    {
-        particles.Remove(this);
+        RunShader();
+
+        if (initialized && (Input.GetKeyDown(KeyCode.S) || particlePositions.Count < 512))
+            for (int i = 0; i < 256; i++)
+            {
+                particlePositions.Add(new Vector2(Random.Range(-WIDTH + 5f, WIDTH - 5f), Random.Range(-HEIGHT + 5f, HEIGHT - 5f)));
+                particleVelocities.Add(Vector2.zero);
+                particleTypes.Add((uint)Random.Range(0, PartMats.Count));
+            }
+
+        if (Input.GetKeyDown(KeyCode.R) || Time.time > last_reset + 240f)
+            Reset();
+
+        for (int p = 0; p < GetParticleCount(); p++)
+        {
+            Graphics.DrawMesh(partMesh, Matrix4x4.TRS(particlePositions[p], Quaternion.Euler(-90f,0f,0f), new Vector3(0.1f, 0.1f, 0.1f)), PartMats[(int)particleTypes[p]], 0);
+        }
     }
 
     private static float blockDist(Vector3 A, Vector3 B)
@@ -134,83 +138,123 @@ public class ParticleController : MonoBehaviour
         return (Mathf.Abs(A.x - B.x) + Mathf.Abs(A.y - B.y));
     }
 
-    public static void Reset()
+    public Vector2[] GetParticlePositions()
     {
-        if (particles != null)
-            foreach (ParticleController part in particles)
-            {
-                Destroy(part.gameObject);
-            }
-
-        initialized = false;
+        return particlePositions.ToArray();
     }
 
-    public static Vector2[] GetParticlePositions()
+    public void SetParticlePositions(Vector2[] pos)
     {
-        Vector2[] output = new Vector2[particles.Count];
-        for (int p=0; p< particles.Count; p++)
-        {
-            output[p] = (Vector2)particles[p].transform.position;
-        }
-        return output;
+        particlePositions = new List<Vector2>(pos);
     }
 
-    public static void SetParticlePositions(Vector2[] pos)
+    public Vector2[] GetParticleVelocities()
     {
-        for (int p = 0; p < particles.Count; p++)
-        {
-            particles[p].transform.position = pos[p];
-        }
+        return particleVelocities.ToArray();
     }
 
-    public static Vector2[] GetParticleVelocities()
+    public void SetParticleVelocities(Vector2[] vels)
     {
-        Vector2[] output = new Vector2[particles.Count];
-        for (int p = 0; p < particles.Count; p++)
-        {
-            output[p] = particles[p].velocity;
-        }
-        return output;
+        particleVelocities = new List<Vector2>(vels);
     }
 
-    public static void SetParticleVelocities(Vector2[] vels)
+    public uint[] GetParticleTypes()
     {
-        for (int p = 0; p < particles.Count; p++)
-        {
-            particles[p].velocity = vels[p];
-        }
+        return particleTypes.ToArray();
     }
 
-    public static uint[] GetParticleTypes()
+    public void SetParticleTypes(uint[] types)
     {
-        uint[] output = new uint[particles.Count];
-        for (int p = 0; p < particles.Count; p++)
-        {
-            output[p] = (uint)particles[p].partType;
-        }
-        return output;
+        particleTypes = new List<uint>(types);
     }
 
-    public static void SetParticleTypes(uint[] types)
+    public Vector3[] GetProperties()
     {
-        for (int p = 0; p < particles.Count; p++)
-        {
-            particles[p].partType = (int)types[p];
-        }
-    }
+        Vector3[] pProps = new Vector3[PartMats.Count * PartMats.Count];
 
-    public static Vector3[] GetProperties()
-    {
-        Vector3[] pProps = new Vector3[PartMatList.partMatList.PartMats.Count * PartMatList.partMatList.PartMats.Count];
-
-        for (int p = 0; p < PartMatList.partMatList.PartMats.Count; p++)
+        for (int p = 0; p < PartMats.Count; p++)
         {
-            for (int q = 0; q < PartMatList.partMatList.PartMats.Count; q++)
+            for (int q = 0; q < PartMats.Count; q++)
             {                
-                pProps[p * PartMatList.partMatList.PartMats.Count + q] = new Vector3(forceEdges[p][q].x, forceEdges[p][q].y, forceMult[p][q]);
+                pProps[p * PartMats.Count + q] = new Vector3(forceEdges[p][q].x, forceEdges[p][q].y, forceMult[p][q]);
             }            
         }
 
         return pProps;
+    }
+
+    private void RunShader()
+    {
+        if (!initialized || GetParticleCount() <= 0)
+            return;
+
+        Vector2[] posData = GetParticlePositions();
+        ComputeBuffer pPos = new ComputeBuffer(posData.Length, 8);
+        pPos.SetData(posData);
+
+        Vector2[] velData = GetParticleVelocities();
+        ComputeBuffer pVels = new ComputeBuffer(velData.Length, 8);
+        pVels.SetData(velData);
+
+        uint[] typeData = GetParticleTypes();
+        ComputeBuffer pTypes = new ComputeBuffer(typeData.Length, 4);
+        pTypes.SetData(typeData);
+
+        Vector2[] newPosData = new Vector2[particlePositions.Count];
+        ComputeBuffer nPos = new ComputeBuffer(newPosData.Length, 8);
+        nPos.SetData(newPosData);
+
+        Vector3[] propertyData = GetProperties();
+        ComputeBuffer pProps = new ComputeBuffer(propertyData.Length, 12);
+        pProps.SetData(propertyData);
+
+        int kernelHandle = shader.FindKernel("PartPhys");
+
+        shader.SetBuffer(kernelHandle, "pPos", pPos);
+        shader.SetBuffer(kernelHandle, "pVels", pVels);
+        shader.SetBuffer(kernelHandle, "pTypes", pTypes);
+        shader.SetBuffer(kernelHandle, "nPos", nPos);
+        shader.SetBuffer(kernelHandle, "pProps", pProps);
+        shader.SetInt("pCount", particlePositions.Count);
+        shader.SetInt("pTypeCount", PartMats.Count);
+        shader.SetVector("boardSize", new Vector4(-WIDTH, -HEIGHT, WIDTH, HEIGHT));
+        shader.Dispatch(kernelHandle, posData.Length, 1, 1);
+
+        pPos.Dispose();
+        pProps.Dispose();
+        pTypes.Dispose();
+
+        Vector2[] newPosOutput = new Vector2[particlePositions.Count];
+        Vector2[] newVelsOutput = new Vector2[particlePositions.Count];
+
+        nPos.GetData(newPosOutput);
+        pVels.GetData(newVelsOutput);
+
+        pVels.Dispose();
+        nPos.Dispose();
+
+        SetParticlePositions(newPosOutput);
+        SetParticleVelocities(newVelsOutput);
+    }
+
+    private int GetParticleCount()
+    {
+        if (!initialized)
+            return 0;
+
+        return particlePositions.Count;
+    }
+
+    public static int SGetParticleCount()
+    {
+        return GameObject.FindGameObjectWithTag("ParticleController").GetComponent<ParticleController>().GetParticleCount();
+    }
+
+    void OnDrawGizmos()
+    {
+        for (int p = 0; p < GetParticleCount(); p++)
+        {
+            Gizmos.DrawSphere(particlePositions[p], 1);
+        }
     }
 }
