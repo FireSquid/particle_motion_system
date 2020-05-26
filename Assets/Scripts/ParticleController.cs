@@ -22,9 +22,7 @@ public class ParticleController : MonoBehaviour
     private List<uint> particleTypes;
 
     private bool initialized = false;
-    private List<List<Vector2>> forceEdges;
-    private List<List<float>> meanForceDist;
-    private List<List<float>> forceDistHalfLength;
+    private List<List<float>> forceMaxDist;
     private List<List<float>> forceMult;
 
     private float maxForce;
@@ -51,26 +49,19 @@ public class ParticleController : MonoBehaviour
         particleVelocities = new List<Vector2>();
         particleTypes = new List<uint>();
 
-        forceEdges = new List<List<Vector2>>();
-        meanForceDist = new List<List<float>>();
-        forceDistHalfLength = new List<List<float>>();
+        forceMaxDist = new List<List<float>>();
         forceMult = new List<List<float>>();
 
         for (int c = 0; c < PartMats.Count; c++)
         {
 
             forceMult.Add(new List<float>());
-            forceEdges.Add(new List<Vector2>());
-            meanForceDist.Add(new List<float>());
-            forceDistHalfLength.Add(new List<float>());
+            forceMaxDist.Add(new List<float>());
 
             for (int i = 0; i < PartMats.Count; i++)
             {
                 forceMult[c].Add(0.012f * Random.Range(-1.5f, 1.0f));
-                float minDist = Random.Range(1.1f, 1.8f);
-                forceEdges[c].Add(new Vector2(minDist, Random.Range(minDist, 5f)));
-                meanForceDist[c].Add((forceEdges[c][i].x + forceEdges[c][i].y) / 2f);
-                forceDistHalfLength[c].Add((forceEdges[c][i].y - forceEdges[c][i].x) / 2f);
+                forceMaxDist[c].Add(Random.Range(1.5f, 7f));
             }
         }
     }
@@ -96,7 +87,7 @@ public class ParticleController : MonoBehaviour
 
     void Awake()
     {
-        Application.targetFrameRate = 60;
+        Application.targetFrameRate = 72;
     }
 
     // Start is called before the first frame update
@@ -114,7 +105,7 @@ public class ParticleController : MonoBehaviour
         RunShader();
 
         if (initialized && (Input.GetKeyDown(KeyCode.S) || particlePositions.Count < 512))
-            for (int i = 0; i < 256; i++)
+            for (int i = 0; i < 128; i++)
             {
                 particlePositions.Add(new Vector2(Random.Range(-WIDTH + 5f, WIDTH - 5f), Random.Range(-HEIGHT + 5f, HEIGHT - 5f)));
                 particleVelocities.Add(Vector2.zero);
@@ -165,15 +156,15 @@ public class ParticleController : MonoBehaviour
         particleTypes = new List<uint>(types);
     }
 
-    public Vector3[] GetProperties()
+    public Vector2[] GetProperties()
     {
-        Vector3[] pProps = new Vector3[PartMats.Count * PartMats.Count];
+        Vector2[] pProps = new Vector2[PartMats.Count * PartMats.Count];
 
         for (int p = 0; p < PartMats.Count; p++)
         {
             for (int q = 0; q < PartMats.Count; q++)
             {                
-                pProps[p * PartMats.Count + q] = new Vector3(forceEdges[p][q].x, forceEdges[p][q].y, forceMult[p][q]);
+                pProps[p * PartMats.Count + q] = new Vector2(forceMaxDist[p][q], forceMult[p][q]);
             }            
         }
 
@@ -201,8 +192,8 @@ public class ParticleController : MonoBehaviour
         ComputeBuffer nPos = new ComputeBuffer(newPosData.Length, 8);
         nPos.SetData(newPosData);
 
-        Vector3[] propertyData = GetProperties();
-        ComputeBuffer pProps = new ComputeBuffer(propertyData.Length, 12);
+        Vector2[] propertyData = GetProperties();
+        ComputeBuffer pProps = new ComputeBuffer(propertyData.Length, 8);
         pProps.SetData(propertyData);
 
         int kernelHandle = shader.FindKernel("PartPhys");

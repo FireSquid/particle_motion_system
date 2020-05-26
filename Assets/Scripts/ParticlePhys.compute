@@ -13,7 +13,7 @@ StructuredBuffer<uint> pTypes;
 // Output position
 RWStructuredBuffer<float2> nPos;
 
-uniform StructuredBuffer<float3> pProps;
+uniform StructuredBuffer<float2> pProps;
 
 uniform uint pCount;
 uniform uint pTypeCount;
@@ -34,13 +34,13 @@ void PartPhys (uint3 id : SV_DispatchThreadID)
 		uint propID = pTypes[id.x] * pTypeCount + pTypes[other];
 
 		bool isDifferent = (id.x != other);
-		bool isClose = (dist < pProps[propID].x);
-		bool isInRange = (dist < pProps[propID].y);
+		bool isClose = (dist < 1.1);
+		bool isInRange = (dist < pProps[propID].x);
 
 		float2 force = isDifferent * (
-			isClose * vect * pProps[propID].x * 2 * (1 / (pProps[propID].x + 2) - 1 / (dist + 2)) +
+			isClose * vect * 2.0 * (0.32258 - 1.0 / (dist + 2.0)) +
 
-			isInRange * (vect / dist) * (1 - abs(dist - 0.5 * (pProps[propID].y + pProps[propID].x)) * 2 / (pProps[propID].y - pProps[propID].x)) * pProps[propID].z
+			isInRange * (vect / dist) * (1.0 - abs(dist - 0.5 * (pProps[propID].x + 1.1)) * 2 / (pProps[propID].x - 1.1)) * pProps[propID].y
 			);
 
 		pVels[id.x] += force;
