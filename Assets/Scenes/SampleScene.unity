@@ -327,6 +327,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 787fabfab45383e40809f90b69709532, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  TargetFramerate: 72
   partMat: {fileID: 2100000, guid: 621eab286d332374dabd2d79c597e2f0, type: 2}
   partMesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
   shader: {fileID: 7200000, guid: a2634b8ddafb28247852e959a7fa9ee7, type: 3}

@@ -11,6 +11,9 @@ public class ParticleController : MonoBehaviour
     private const float HEIGHT = 44.5f;
 
     [SerializeField]
+    private int TargetFramerate;
+
+    [SerializeField]
     private Material partMat;
     [SerializeField]
     private Mesh partMesh;
@@ -45,6 +48,7 @@ public class ParticleController : MonoBehaviour
     {
         initialized = true;
 
+        // Initialize lists
         particlePositions = new List<Vector2>();
         particleVelocities = new List<Vector2>();
         particleTypes = new List<uint>();
@@ -52,31 +56,35 @@ public class ParticleController : MonoBehaviour
         forceMaxDist = new List<List<float>>();
         forceMult = new List<List<float>>();
 
+        // For each type of particle
         for (int c = 0; c < PartMats.Count; c++)
         {
-
             forceMult.Add(new List<float>());
             forceMaxDist.Add(new List<float>());
 
             for (int i = 0; i < PartMats.Count; i++)
             {
+                // Add a random force strength and range for every other force
                 forceMult[c].Add(0.012f * Random.Range(-1.5f, 1.0f));
                 forceMaxDist[c].Add(Random.Range(1.5f, 7f));
             }
         }
     }
 
+    // Creates a new simulation with new random particles
     private void Reset()
     {
         initialized = false;
 
         last_reset = Time.time;
 
-        PartMats = new List<Material>();
+        PartMats = new List<Material>();    // Reset 
 
+        // Randomize the number of types of particles
         int partCount = Random.Range(5, 12);
         for (int i = 0; i < partCount; i++)
         {
+            // Get random colors for the different particle types
             Material newMat = new Material(partMat);
             newMat.color = Random.ColorHSV(0, 1, 0.7f, 1f, 0.5f, 1f, 1f, 1f);
             PartMats.Add(newMat);
@@ -87,7 +95,9 @@ public class ParticleController : MonoBehaviour
 
     void Awake()
     {
-        Application.targetFrameRate = 72;
+        Application.targetFrameRate = TargetFramerate;
+
+        Screen.fullScreen = true;
     }
 
     // Start is called before the first frame update
@@ -100,10 +110,14 @@ public class ParticleController : MonoBehaviour
     void Update()
     {
 
-        //transform.position += (Vector3)velocity;
+        // Quit the application
+        if (Input.GetKeyDown(KeyCode.Escape))
+            Application.Quit();
 
+        // Run the shader to 
         RunShader();
 
+        // Add 128 new particles to the simulation when the S key is pressed or there are less than 512 currently
         if (initialized && (Input.GetKeyDown(KeyCode.S) || particlePositions.Count < 512))
             for (int i = 0; i < 128; i++)
             {
@@ -112,9 +126,11 @@ public class ParticleController : MonoBehaviour
                 particleTypes.Add((uint)Random.Range(0, PartMats.Count));
             }
 
+        // Force a reset with R or automatically reset every 4 minutes (automatic reset was intended for using this program as a desktop background)
         if (Input.GetKeyDown(KeyCode.R) || Time.time > last_reset + 240f)
             Reset();
 
+        // Draw each particle
         for (int p = 0; p < GetParticleCount(); p++)
         {
             Graphics.DrawMesh(partMesh, Matrix4x4.TRS(particlePositions[p], Quaternion.Euler(-90f,0f,0f), new Vector3(0.1f, 0.1f, 0.1f)), PartMats[(int)particleTypes[p]], 0);
@@ -176,6 +192,7 @@ public class ParticleController : MonoBehaviour
         if (!initialized || GetParticleCount() <= 0)
             return;
 
+        // Load data into buffers to be passed to the shader
         Vector2[] posData = GetParticlePositions();
         ComputeBuffer pPos = new ComputeBuffer(posData.Length, 8);
         pPos.SetData(posData);
@@ -196,8 +213,9 @@ public class ParticleController : MonoBehaviour
         ComputeBuffer pProps = new ComputeBuffer(propertyData.Length, 8);
         pProps.SetData(propertyData);
 
-        int kernelHandle = shader.FindKernel("PartPhys");
+        int kernelHandle = shader.FindKernel("PartPhys");   // Load the compute shader
 
+        // Send input data to the shader
         shader.SetBuffer(kernelHandle, "pPos", pPos);
         shader.SetBuffer(kernelHandle, "pVels", pVels);
         shader.SetBuffer(kernelHandle, "pTypes", pTypes);
@@ -206,21 +224,26 @@ public class ParticleController : MonoBehaviour
         shader.SetInt("pCount", particlePositions.Count);
         shader.SetInt("pTypeCount", PartMats.Count);
         shader.SetVector("boardSize", new Vector4(-WIDTH, -HEIGHT, WIDTH, HEIGHT));
-        shader.Dispatch(kernelHandle, posData.Length, 1, 1);
+        shader.Dispatch(kernelHandle, posData.Length, 1, 1);    // Run the shader
 
+        // Delete used buffers
         pPos.Dispose();
         pProps.Dispose();
         pTypes.Dispose();
 
+        // Arrays for holding shader output
         Vector2[] newPosOutput = new Vector2[particlePositions.Count];
         Vector2[] newVelsOutput = new Vector2[particlePositions.Count];
 
+        // Get output positions and velocities from the shader
         nPos.GetData(newPosOutput);
         pVels.GetData(newVelsOutput);
 
+        // Delete used buffers
         pVels.Dispose();
         nPos.Dispose();
 
+        // Use data from shader to update particles
         SetParticlePositions(newPosOutput);
         SetParticleVelocities(newVelsOutput);
     }
@@ -230,19 +253,21 @@ public class ParticleController : MonoBehaviour
         if (!initialized)
             return 0;
 
-        return particlePositions.Count;
+        return particlePositions.Count; // Get the number of particles
     }
 
+    // Convenience function for the FPS display
     public static int SGetParticleCount()
     {
         return GameObject.FindGameObjectWithTag("ParticleController").GetComponent<ParticleController>().GetParticleCount();
     }
 
+    // Particle display
     void OnDrawGizmos()
     {
         for (int p = 0; p < GetParticleCount(); p++)
         {
-            Gizmos.DrawSphere(particlePositions[p], 1);
+            Gizmos.DrawSphere(particlePositions[p], 1); // Draw a particle
         }
     }
 }
