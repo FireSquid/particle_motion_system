@@ -4,60 +4,68 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel PartPhys
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-StructuredBuffer<float2> pPos;
-RWStructuredBuffer<float2> pVels;
-StructuredBuffer<uint> pTypes;
+StructuredBuffer<float2> pPos;		// Particles' positions
+RWStructuredBuffer<float2> pVels;	// Particles' velocities
+StructuredBuffer<uint> pTypes;		// Particles' types
 
-// Output position
+// Output positions
 RWStructuredBuffer<float2> nPos;
 
+// Range and strength of the force between each pair of particle types
 uniform StructuredBuffer<float2> pProps;
 
-uniform uint pCount;
-uniform uint pTypeCount;
+uniform uint pCount;		// Number of particles
+uniform uint pTypeCount;	// Number of particle types
 
-uniform float4 boardSize;
+uniform float4 boardSize;	// Dimensions of the board
 
 
 [numthreads(256,1,1)]
 void PartPhys (uint3 id : SV_DispatchThreadID)
 {
-	nPos[id.x] = pPos[id.x];
+	nPos[id.x] = pPos[id.x];	// Set the output position to the input position (will be added to later)
 
+	// For each other particle in the simulatoin
 	for (uint other = 0; other < pCount; other++)
 	{
 		float dist = max(distance(pPos[id.x], pPos[other]), 0.001);
-		float2 vect = pPos[other] - pPos[id.x];
+		float2 vect = pPos[other] - pPos[id.x];		// Vector from the current particle to the other particle
 
-		uint propID = pTypes[id.x] * pTypeCount + pTypes[other];
+		uint propID = pTypes[id.x] * pTypeCount + pTypes[other];	// Gets the index of the force property data in pProps
 
-		bool isDifferent = (id.x != other);
-		bool isClose = (dist < 1.1);
-		bool isInRange = (dist < pProps[propID].x);
+		bool isDifferent = (id.x != other);		// Make sure a particle can't apply a force to itself
+		bool isClose = (dist < 1.1);			// Activates force that repels particles that overlap each other
+		bool isInRange = (dist < pProps[propID].x);	// Forces are only applied within randomly generated distances
 
 		float2 force = isDifferent * (
+			// Force particles that are too close together apart
 			isClose * vect * 2.0 * (0.32258 - 1.0 / (dist + 2.0)) +
 
+			// Force between two particles that are in range
 			isInRange * (vect / dist) * (1.0 - abs(dist - 0.5 * (pProps[propID].x + 1.1)) * 2 / (pProps[propID].x - 1.1)) * pProps[propID].y
 			);
 
+		// Accelerate based on the force
 		pVels[id.x] += force;
 	}
 
+	// "Friction"
 	pVels[id.x] *= 0.95;
 
+	// Update position of the particle based on the velocity
 	nPos[id.x] += pVels[id.x];
 
+	// Check if the particle has gone off the screen
 	bool offLeft = (nPos[id.x].x < boardSize.x && pVels[id.x].x < 0);
 	bool offRight = (nPos[id.x].x > boardSize.z && pVels[id.x].x > 0);
 	bool offBottom = (nPos[id.x].y < boardSize.y && pVels[id.x].y < 0);
 	bool offTop = (nPos[id.x].y > boardSize.w && pVels[id.x].y > 0);
 
+	// Reverse the particles direction if it goes off screen so it bounces off the edge
 	pVels[id.x].x -= 2 * pVels[id.x].x * (offLeft || offRight);
 	pVels[id.x].y -= 2 * pVels[id.x].y * (offBottom || offTop);
 
+	// Clamp the particles position to the screen
 	nPos[id.x].x = clamp(nPos[id.x].x, boardSize.x, boardSize.z);
 	nPos[id.x].y = clamp(nPos[id.x].y, boardSize.y, boardSize.w);
 
